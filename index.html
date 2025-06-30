@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Estante 3D</title>
+  <style>
+    body { margin:0; overflow:hidden; font-family:sans-serif; }
+    #ui {
+      position:fixed; top:0; left:0; bottom:0;
+      width:300px; padding:1em;
+      background:#f2f2f2; overflow-y:auto;
+      box-shadow:2px 0 5px rgba(0,0,0,0.1); z-index:10;
+    }
+    #canvas-container {
+      position:absolute; top:5px; bottom:5px;
+      left:300px; right:0;
+    }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th,td { border:1px solid #ccc; padding:10px; text-align:left; }
+    th { background:#e0e0e0; }
+
+     .label {
+    background: rgba(255,255,255,0.8);
+    padding: 2px 4px;
+    border-radius: 2px;
+    font-size: 12px;
+    white-space: nowrap;
+   }
+
+    .dim-input {
+      width: 60px;
+      font-size: 12px;
+      padding: 2px 4px;
+      border: 1px solid #888;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.9);
+    }
+    /* overlay do CSS2DRenderer */
+    .label-container {
+    pointer-events: none;
+    }
+    /* inputs de cotagem continuam interativos */
+    .dim-input {
+    pointer-events: auto;
+    cursor: text;
+    }
+
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <h2>Parâmetros</h2>
+    <label>Largura (mm): <input id="width" type="number" value="1200"/></label><br/>
+    <label>Altura (mm): <input id="height" type="number" value="1800"/></label><br/>
+    <label>Profundidade (mm): <input id="depth" type="number" value="400"/></label><br/>
+    <label>Espessura Painéis (mm): <input id="boxThickness" type="number" value="18"/></label><br/>
+    <label>Espessura Portas (mm): <input id="doorThickness" type="number" value="18"/></label><br/>
+    <label>Altura Pés (mm): <input id="legHeight" type="number" value="100"/></label><br/>
+    <label>Diâmetro Pés (mm): <input id="legDiameter" type="number" value="25"/></label><br/>
+    <label>Prateleiras: <input id="shelves" type="number" value="3"/></label><br/>
+    <label>Portas: <input id="doors" type="number" value="2"/></label><br/>
+    <label>Margem Portas (mm): <input id="doorMargin" type="number" value="3"/></label><br/>
+    <label>Balanço Pés (mm): <input id="footOffset" type="number" value="50"/></label><br/>
+    <h2>Opções</h2>
+    <label><input id="handles" type="checkbox" unchecked/> Puxadores</label><br/>
+    <label><input id="backPanel" type="checkbox" checked/> Painel Traseiro</label><br/>
+    <label><input id="grid" type="checkbox" checked/> Grade</label><br/>
+    <label><input id="autoRotate" type="checkbox"/> Rotação Automática</label><br/>
+    <label>Material:
+      <select id="material">
+        <option value="wood">Madeira</option>
+        <option value="lacquer">Laca</option>
+        <option value="metal">Metal</option>
+        <option value="glass">Vidro</option>
+      </select>
+    </label><br/>
+    <label>Importar Textura (.jpg):
+      <input type="file" id="textureUpload" accept=".jpg,image/jpeg"/>
+    </label>
+    <div id="textureFeedback"></div>
+    <br/><br/>
+    <button id="btnUpdate">Atualizar</button>
+    <button id="btnExport">Exportar GLTF</button>
+    <div id="partsList"></div>
+  </div>
+  <div id="canvas-container"></div>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
