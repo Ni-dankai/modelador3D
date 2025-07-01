@@ -18,6 +18,8 @@ let scene, camera, renderer, labelRenderer, controls;
 let shelfGroup = null, gridHelper = null, dimGroup = null;
 let handleGLTF = null;
 let current     = {};
+let ctrlPressed = false; // Novo estado global para Ctrl
+let showDimensions = true; // Novo estado global para cotas
 
 // carrega modelo de puxador
 new GLTFLoader().load(
@@ -175,7 +177,7 @@ function rebuildShelf(){
   }
   shelfGroup = createShelfGroup(current);
   scene.add(shelfGroup);
-  addDimensions(current);
+  if (showDimensions) addDimensions(current); // Só adiciona cotas se ativado
   generatePartsList();
 }
 
@@ -522,6 +524,21 @@ function createDimField(p1, p2, off, paramId) {
   });
 }
 
+function toggleDimensions(force) {
+  if (typeof force === 'boolean') {
+    showDimensions = force;
+  } else {
+    showDimensions = !showDimensions;
+  }
+  if (shelfGroup) {
+    if (dimGroup) shelfGroup.remove(dimGroup);
+    dimGroup = null;
+    if (showDimensions) addDimensions(current);
+    else if (labelRenderer && labelRenderer.domElement) labelRenderer.domElement.innerHTML = '';
+  }
+}
+window.toggleDimensions = toggleDimensions;
+
 function addDimensions(p) {
   if (!shelfGroup) return;
   if (dimGroup) shelfGroup.remove(dimGroup);
@@ -592,6 +609,8 @@ function generatePartsList(){
 
 function onDocumentClick(evt){
   if(!shelfGroup)return;
+  // Só permite interação se Ctrl estiver pressionado e botão esquerdo do mouse
+  if (!ctrlPressed || evt.button !== 0) return;
   const mx=((evt.clientX-UI_WIDTH)/(window.innerWidth-UI_WIDTH))*2-1;
   const my=-(evt.clientY/window.innerHeight)*2+1;
   const ray=new THREE.Raycaster();
@@ -607,6 +626,13 @@ function onDocumentClick(evt){
     piv.userData.open = !piv.userData.open;
   }
 }
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'Control') ctrlPressed = true;
+});
+window.addEventListener('keyup', e => {
+  if (e.key === 'Control') ctrlPressed = false;
+});
 
 function animate(time){
   requestAnimationFrame(animate);
@@ -681,3 +707,7 @@ window.addEventListener('DOMContentLoaded', () => {
     reader.readAsDataURL(file);
   });
 });
+
+window.toggleDimensions = toggleDimensions;
+
+//# sourceMappingURL=main.js.map

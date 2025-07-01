@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Estante 3D</title>
   <style>
-    body { margin:0; overflow:hidden; font-family:sans-serif; }
+    body { margin:5; overflow:hidden; font-family:sans-serif; }
     #ui {
       position:fixed; top:0; left:0; bottom:0;
-      width:300px; padding:1em;
+      width:500px; padding:1em;
       background:#f2f2f2; overflow-y:auto;
       box-shadow:2px 0 5px rgba(0,0,0,0.1); z-index:10;
     }
@@ -82,9 +82,16 @@
     <br/><br/>
     <button id="btnUpdate">Atualizar</button>
     <button id="btnExport">Exportar GLTF</button>
+    <button id="btnToggleDims">Mostrar/ocultar cotas</button>
+    <h4>Segure Ctrl + Mouse 1 para abrir portas</h4>
     <div id="partsList"></div>
   </div>
   <div id="canvas-container"></div>
   <script type="module" src="main.js"></script>
+  <script>
+    document.getElementById('btnToggleDims').onclick = function() {
+      if (window.toggleDimensions) window.toggleDimensions();
+    };
+  </script>
 </body>
 </html>
