@@ -8,13 +8,22 @@
     body { margin:5; overflow:hidden; font-family:sans-serif; }
     #ui {
       position:fixed; top:0; left:0; bottom:0;
-      width:500px; padding:1em;
+      width:300px; padding:1em;
       background:#f2f2f2; overflow-y:auto;
       box-shadow:2px 0 5px rgba(0,0,0,0.1); z-index:10;
+      border-right: 1px solid #ddd;
+    }
+    #library-ui {
+      position:fixed; top:0; right:0; bottom:0;
+      width:300px; padding:1em;
+      background:#f2f2f2; overflow-y:auto;
+      box-shadow:-2px 0 5px rgba(0,0,0,0.1); z-index:10;
+      border-left: 1px solid #ddd;
     }
     #canvas-container {
       position:absolute; top:5px; bottom:5px;
-      left:300px; right:0;
+      left:300px; right:300px;
+      background: #f8f8f8;
     }
     table { width:100%; border-collapse:collapse; font-size:14px; }
     th,td { border:1px solid #ccc; padding:10px; text-align:left; }
@@ -136,7 +145,55 @@
     .preset-btn:hover {
       color: #000;
     }
-
+    
+    /* Ajustes para o painel da biblioteca */
+    #library-ui h2 {
+      margin-top: 0;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #ddd;
+      color: #333;
+    }
+    
+    #library-ui p {
+      margin-top: 0;
+      color: #666;
+      font-size: 0.9em;
+      margin-bottom: 1.5em;
+    }
+    
+    #btnSavePreset {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    #btnSavePreset:hover {
+      background-color: #45a049;
+    }
+    
+    /* Melhorias responsivas */
+    @media (max-width: 1200px) {
+      #ui, #library-ui {
+        width: 250px;
+      }
+      #canvas-container {
+        left: 250px;
+        right: 250px;
+      }
+    }
+    
+    @media (max-width: 900px) {
+      #ui, #library-ui {
+        width: 200px;
+      }
+      #canvas-container {
+        left: 200px;
+        right: 200px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -171,16 +228,6 @@
     </label>
     <div id="textureFeedback"></div>
     
-    <!-- Biblioteca de Presets -->
-    <h2>Biblioteca</h2>
-    <div id="presets-panel">
-      <div id="preset-actions">
-        <input type="text" id="preset-name" placeholder="Nome do preset" />
-        <button id="btnSavePreset">Salvar preset atual</button>
-      </div>
-      <div id="presets-list"></div>
-    </div>
-    
     <br/><br/>
     <button id="btnUpdate">Atualizar</button>
     <button id="btnExport">Exportar GLTF</button>
@@ -188,6 +235,20 @@
     <h4>Segure Ctrl + Mouse 1 para abrir portas</h4>
     <div id="partsList"></div>
   </div>
+
+  <!-- Painel da Biblioteca à direita -->
+  <div id="library-ui">
+    <h2>Biblioteca de Móveis</h2>
+    <p>Salve e carregue modelos de móveis personalizados</p>
+    <div id="presets-panel">
+      <div id="preset-actions">
+        <input type="text" id="preset-name" placeholder="Nome do preset" />
+        <button id="btnSavePreset">Salvar preset atual</button>
+      </div>
+      <div id="presets-list"></div>
+    </div>
+  </div>
+  
   <div id="canvas-container"></div>
   <script type="module" src="main.js"></script>
   <script>

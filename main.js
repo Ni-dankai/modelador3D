@@ -7,7 +7,8 @@ import { GLTFLoader }                         from 'three/examples/jsm/loaders/G
 import { CSS2DRenderer, CSS2DObject }         from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import TWEEN                                  from '@tweenjs/tween.js';
 
-const UI_WIDTH = 300;
+const UI_WIDTH = 300; // Largura do painel de controles esquerdo
+const LIBRARY_WIDTH = 300; // Largura do painel da biblioteca direito
 
 // materiais
 const MATS = {};
@@ -40,20 +41,20 @@ function init() {
 
   camera = new THREE.PerspectiveCamera(
     60,
-    (window.innerWidth - UI_WIDTH) / window.innerHeight,
+    (window.innerWidth - UI_WIDTH - LIBRARY_WIDTH) / window.innerHeight,
     1, 10000
   );
   camera.position.set(2000,2000,3000);
 
   // WebGL
   renderer = new THREE.WebGLRenderer({ antialias:true });
-  renderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
+  renderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
   document.getElementById('canvas-container').appendChild(renderer.domElement);
 
   // CSS2D overlay
   labelRenderer = new CSS2DRenderer();
   labelRenderer.domElement.classList.add('label-container');
-  labelRenderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
   labelRenderer.domElement.style.position = 'absolute';
   labelRenderer.domElement.style.top      = '0';
   document.getElementById('canvas-container').appendChild(labelRenderer.domElement);
@@ -79,10 +80,10 @@ function init() {
 }
 
 function onResize() {
-  camera.aspect = (window.innerWidth - UI_WIDTH) / window.innerHeight;
+  camera.aspect = (window.innerWidth - UI_WIDTH - LIBRARY_WIDTH) / window.innerHeight;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
-  labelRenderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
+  renderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
+  labelRenderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
 }
 
 function initMaterials() {
@@ -621,7 +622,7 @@ function onDocumentClick(evt){
   if(!shelfGroup)return;
   // Só permite interação se Ctrl estiver pressionado e botão esquerdo do mouse
   if (!ctrlPressed || evt.button !== 0) return;
-  const mx=((evt.clientX-UI_WIDTH)/(window.innerWidth-UI_WIDTH))*2-1;
+  const mx=((evt.clientX-UI_WIDTH)/(window.innerWidth-UI_WIDTH-LIBRARY_WIDTH))*2-1;
   const my=-(evt.clientY/window.innerHeight)*2+1;
   const ray=new THREE.Raycaster();
   ray.setFromCamera(new THREE.Vector2(mx,my), camera);
@@ -737,7 +738,7 @@ function captureThumbnail(width = 100, height = 100) {
     }
     
     // Renderizar novamente na visualização original
-    renderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
+    renderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
     renderer.render(scene, camera);
     
     // Limpar recursos
