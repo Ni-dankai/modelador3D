@@ -14,6 +14,10 @@ const MATS = {};
 const CUSTOM_TEXTURES = {};
 let customTextureList = [];
 
+// Presets
+const STORAGE_KEY = 'furniture3dPresets';
+let presetsData = [];
+
 let scene, camera, renderer, labelRenderer, controls;
 let shelfGroup = null, gridHelper = null, dimGroup = null;
 let handleGLTF = null;
@@ -146,6 +150,12 @@ function bindUI(){
   document.getElementById('btnUpdate').onclick = upd;
   document.getElementById('btnExport').onclick = exportGLTF;
   document.querySelectorAll('input,select').forEach(el=>el.onchange = upd);
+  
+  // Eventos para biblioteca de presets
+  document.getElementById('btnSavePreset').onclick = saveCurrentPreset;
+  
+  // Carrega os presets salvos
+  loadPresets();
 }
 
 function tweenUpdate(from,to){
@@ -653,6 +663,118 @@ function exportGLTF(){
   });
 }
 
+// Captura uma thumbnail do móvel atual
+function captureThumbnail(width = 100, height = 100) {
+  if (!shelfGroup) return null;
+  
+  console.log("Iniciando captura de thumbnail...");
+  
+  // Criar um canvas temporário para captura
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = width;
+  tempCanvas.height = height;
+  const tempRenderer = new THREE.WebGLRenderer({
+    canvas: tempCanvas,
+    antialias: true,
+    preserveDrawingBuffer: true
+  });
+  tempRenderer.setSize(width, height);
+  
+  // Salvar configuração original da câmera e cena
+  const originalPosition = camera.position.clone();
+  const originalCameraRotation = camera.rotation.clone();
+  const originalTarget = controls.target.clone();
+  const originalBackground = scene.background;
+  const originalShelfRotation = shelfGroup ? shelfGroup.rotation.y : 0;
+  
+  try {
+    // Configurar para captura
+    scene.background = new THREE.Color(0xf5f5f5);
+    if (shelfGroup) {
+      shelfGroup.rotation.y = Math.PI / 6; // Rotação de 30 graus para melhor visualização
+    }
+    
+    // Ajustar câmera para enquadrar o móvel
+    const box = new THREE.Box3().setFromObject(shelfGroup);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    
+    // Definir posição da câmera para captura
+    const tempCamera = camera.clone();
+    const fov = tempCamera.fov * (Math.PI / 180);
+    const maxSize = Math.max(size.x, size.y, size.z);
+    const distance = maxSize / (2 * Math.tan(fov / 2)) * 1.5;
+    
+    tempCamera.position.set(
+      center.x + distance * 0.8, 
+      center.y + distance * 0.5, 
+      center.z + distance * 0.8
+    );
+    tempCamera.lookAt(center);
+    tempCamera.updateProjectionMatrix();
+    
+    // Renderizar e capturar
+    tempRenderer.render(scene, tempCamera);
+    const dataURL = tempCanvas.toDataURL('image/png');
+    console.log("Thumbnail gerada com sucesso!");
+    
+    // Visualização de debug (remove em produção)
+    console.log("Dados da thumbnail:", dataURL.substring(0, 100) + "...");
+    
+    return dataURL;
+  } catch (err) {
+    console.error("Erro ao capturar thumbnail:", err);
+    return null;
+  } finally {
+    // Restaurar configurações originais
+    camera.position.copy(originalPosition);
+    camera.rotation.copy(originalCameraRotation);
+    controls.target.copy(originalTarget);
+    controls.update();
+    scene.background = originalBackground;
+    if (shelfGroup) {
+      shelfGroup.rotation.y = originalShelfRotation;
+    }
+    
+    // Renderizar novamente na visualização original
+    renderer.setSize(window.innerWidth - UI_WIDTH, window.innerHeight);
+    renderer.render(scene, camera);
+    
+    // Limpar recursos
+    tempRenderer.dispose();
+  }
+}
+
+// Método alternativo para capturar thumbnails
+function simpleCaptureThumb() {
+  if (!shelfGroup || !renderer) return null;
+  
+  // Salvar estado atual
+  const width = renderer.domElement.width;
+  const height = renderer.domElement.height;
+  const originalRotationY = shelfGroup.rotation.y;
+  
+  try {
+    // Rotacionar móvel para uma boa visualização
+    shelfGroup.rotation.y = Math.PI / 5;
+    
+    // Renderizar
+    renderer.render(scene, camera);
+    
+    // Capturar imagem
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    console.log('Thumbnail simples capturada com sucesso');
+    return dataUrl;
+  } catch (e) {
+    console.error('Erro ao capturar thumbnail simples:', e);
+    return null;
+  } finally {
+    // Restaurar estado
+    shelfGroup.rotation.y = originalRotationY;
+    renderer.render(scene, camera);
+  }
+}
+
 function get(id){ return document.getElementById(id).value; }
 function chk(id){ return document.getElementById(id).checked; }
 
@@ -708,6 +830,331 @@ window.addEventListener('DOMContentLoaded', () => {
   });
 });
 
-window.toggleDimensions = toggleDimensions;
+// ===== BIBLIOTECA DE PRESETS =====
 
-//# sourceMappingURL=main.js.map
+// Carrega presets do localStorage
+function loadPresets() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    console.log('Dados salvos no localStorage:', saved);
+    
+    if (saved) {
+      presetsData = JSON.parse(saved);
+      console.log('Presets carregados:', presetsData);
+    } else {
+      console.log('Nenhum preset encontrado no localStorage');
+      presetsData = [];
+    }
+  } catch (err) {
+    console.error('Erro ao carregar presets:', err);
+    presetsData = [];
+  }
+  
+  updatePresetsUI();
+}
+
+// Salva presets no localStorage
+function savePresetsToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(presetsData));
+  } catch (err) {
+    console.error('Erro ao salvar presets:', err);
+    showPresetFeedback('Erro ao salvar presets! Verifique o console.');
+  }
+}
+
+// Salva o preset atual
+function saveCurrentPreset() {
+  const nameInput = document.getElementById('preset-name');
+  let presetName = nameInput.value.trim();
+  
+  if (!presetName) {
+    showPresetFeedback('Digite um nome para o preset!', 'error');
+    return;
+  }
+  
+  // Obtém parâmetros atuais do móvel
+  const presetData = readUI();
+  console.log('Dados do preset a ser salvo:', presetData);
+  
+  // Captura thumbnail do móvel atual
+  console.log('Capturando thumbnail para o preset:', presetName);
+  
+  // Tentar primeiro o método avançado, depois o simples se falhar
+  let thumbnail = null;
+  try {
+    thumbnail = captureThumbnail(150, 150);
+  } catch (e) {
+    console.error('Falha no método de captura avançada, tentando método simples:', e);
+    thumbnail = simpleCaptureThumb();
+  }
+  
+  console.log('Thumbnail capturada com sucesso?', !!thumbnail);
+  
+  // Verifica se já existe um preset com este nome
+  const existingIndex = presetsData.findIndex(p => p.name === presetName);
+  
+  if (existingIndex >= 0) {
+    if (!confirm(`Já existe um preset chamado "${presetName}". Deseja substituí-lo?`)) {
+      return;
+    }
+    presetsData[existingIndex] = { name: presetName, data: presetData, thumbnail };
+    console.log(`Preset "${presetName}" atualizado com thumbnail:`, !!thumbnail);
+  } else {
+    presetsData.push({ name: presetName, data: presetData, thumbnail });
+    console.log(`Novo preset "${presetName}" adicionado com thumbnail:`, !!thumbnail);
+  }
+  
+  // Salva no localStorage e atualiza UI
+  savePresetsToStorage();
+  updatePresetsUI();
+  nameInput.value = '';
+  showPresetFeedback(`Preset "${presetName}" salvo com sucesso!`);
+}
+
+// Carrega um preset
+function loadPreset(presetName) {
+  console.log('Tentando carregar preset:', presetName);
+  console.log('Lista de presets disponíveis:', presetsData);
+  
+  const preset = presetsData.find(p => p.name === presetName);
+  
+  if (!preset) {
+    console.error('Preset não encontrado:', presetName);
+    showPresetFeedback(`Preset "${presetName}" não encontrado!`, 'error');
+    return;
+  }
+  
+  console.log('Dados do preset encontrado:', preset);
+  
+  if (!preset.data) {
+    console.error('Dados do preset são inválidos:', preset);
+    showPresetFeedback(`Dados do preset "${presetName}" são inválidos!`, 'error');
+    return;
+  }
+  
+  // Aplica os valores do preset à UI
+  try {
+    console.log('Aplicando dados à UI:', preset.data);
+    applyPresetToUI(preset.data);
+    
+    // Reconstrói o móvel
+    current = readUI();
+    console.log('Valores atualizados após aplicar preset:', current);
+    rebuildShelf();
+    
+    showPresetFeedback(`Preset "${presetName}" carregado com sucesso!`);
+  } catch (err) {
+    console.error('Erro ao aplicar preset:', err);
+    showPresetFeedback(`Erro ao aplicar preset "${presetName}": ${err.message}`, 'error');
+  }
+}
+
+// Renomeia um preset
+function renamePreset(oldName) {
+  const newName = prompt(`Digite o novo nome para o preset "${oldName}":`, oldName);
+  
+  if (!newName || newName === oldName) {
+    return; // Cancelado ou mesmo nome
+  }
+  
+  // Verifica se já existe um preset com o novo nome
+  if (presetsData.some(p => p.name === newName)) {
+    showPresetFeedback(`Já existe um preset chamado "${newName}"!`, 'error');
+    return;
+  }
+  
+  const presetIndex = presetsData.findIndex(p => p.name === oldName);
+  if (presetIndex >= 0) {
+    presetsData[presetIndex].name = newName;
+    savePresetsToStorage();
+    updatePresetsUI();
+    showPresetFeedback(`Preset renomeado para "${newName}"!`);
+  }
+}
+
+// Exclui um preset
+function deletePreset(presetName) {
+  if (!confirm(`Tem certeza que deseja excluir o preset "${presetName}"?`)) {
+    return;
+  }
+  
+  const presetIndex = presetsData.findIndex(p => p.name === presetName);
+  if (presetIndex >= 0) {
+    presetsData.splice(presetIndex, 1);
+    savePresetsToStorage();
+    updatePresetsUI();
+    showPresetFeedback(`Preset "${presetName}" excluído!`);
+  }
+}
+
+// Aplica valores de um preset aos inputs da UI
+function applyPresetToUI(presetData) {
+  // Aplica cada valor do preset ao seu respectivo campo na UI
+  document.getElementById('width').value = presetData.W;
+  document.getElementById('height').value = presetData.H;
+  document.getElementById('depth').value = presetData.D;
+  document.getElementById('boxThickness').value = presetData.boxTh;
+  document.getElementById('doorThickness').value = presetData.doorTh;
+  document.getElementById('legHeight').value = presetData.legH;
+  document.getElementById('legDiameter').value = presetData.legD;
+  document.getElementById('shelves').value = presetData.shelves;
+  document.getElementById('doors').value = presetData.doors;
+  document.getElementById('doorMargin').value = presetData.doorMargin;
+  document.getElementById('footOffset').value = presetData.footOffset;
+  
+  // Checkboxes
+  document.getElementById('handles').checked = presetData.handles;
+  document.getElementById('backPanel').checked = presetData.backPanel;
+  document.getElementById('grid').checked = presetData.grid;
+  document.getElementById('autoRotate').checked = presetData.autoRotate;
+  
+  // Material
+  document.getElementById('material').value = presetData.material || 'wood';
+}
+
+// Atualiza a interface dos presets com thumbnails
+function updatePresetsUI() {
+  const presetsList = document.getElementById('presets-list');
+  if (!presetsList) return;
+  
+  console.log('Atualizando UI de presets:', presetsData);
+  
+  // Limpa a lista atual
+  presetsList.innerHTML = '';
+  
+  if (presetsData.length === 0) {
+    presetsList.innerHTML = '<div class="preset-item">Nenhum preset salvo</div>';
+    return;
+  }
+  
+  // Adiciona cada preset à lista com thumbnail
+  presetsData.forEach(preset => {
+    console.log('Renderizando preset:', preset.name, 'thumbnail disponível:', !!preset.thumbnail);
+    
+    const presetItem = document.createElement('div');
+    presetItem.className = 'preset-item';
+    
+    // Container para thumbnail e nome (lado esquerdo)
+    const infoContainer = document.createElement('div');
+    infoContainer.className = 'preset-info';
+    infoContainer.style.display = 'flex';
+    infoContainer.style.alignItems = 'center';
+    infoContainer.style.flex = '1';
+    infoContainer.style.cursor = 'pointer';
+    infoContainer.onclick = () => loadPreset(preset.name);
+    
+    // Elemento para a thumbnail (independente se há imagem ou não)
+    const thumbnailContainer = document.createElement('div');
+    thumbnailContainer.style.width = '50px';
+    thumbnailContainer.style.height = '50px';
+    thumbnailContainer.style.marginRight = '10px';
+    thumbnailContainer.style.borderRadius = '4px';
+    thumbnailContainer.style.border = '1px solid #ddd';
+    thumbnailContainer.style.overflow = 'hidden';
+    thumbnailContainer.style.display = 'flex';
+    thumbnailContainer.style.alignItems = 'center';
+    thumbnailContainer.style.justifyContent = 'center';
+    thumbnailContainer.style.backgroundColor = '#f0f0f0';
+    
+    // Thumbnail ou ícone de placeholder
+    if (preset.thumbnail) {
+      const thumbnail = document.createElement('img');
+      thumbnail.className = 'preset-thumbnail';
+      thumbnail.src = preset.thumbnail;
+      thumbnail.alt = preset.name;
+      thumbnail.style.width = '100%';
+      thumbnail.style.height = '100%';
+      thumbnail.style.objectFit = 'cover';
+      
+      // Verificar se a imagem carrega corretamente
+      thumbnail.onerror = () => {
+        console.error('Erro ao carregar thumbnail para:', preset.name);
+        thumbnailContainer.innerHTML = '📦';
+        thumbnailContainer.style.fontSize = '24px';
+      };
+      
+      thumbnailContainer.appendChild(thumbnail);
+    } else {
+      // Placeholder se não houver thumbnail
+      thumbnailContainer.textContent = '📦';
+      thumbnailContainer.style.fontSize = '24px';
+    }
+    
+    infoContainer.appendChild(thumbnailContainer);
+    
+    // Nome do preset
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'preset-name';
+    nameSpan.textContent = preset.name;
+    infoContainer.appendChild(nameSpan);
+    
+    presetItem.appendChild(infoContainer);
+    
+    // Botões de ação (lado direito)
+    const actionsDiv = document.createElement('div');
+    actionsDiv.className = 'preset-actions';
+    
+    // Botão renomear
+    const renameBtn = document.createElement('button');
+    renameBtn.className = 'preset-btn';
+    renameBtn.textContent = '✏️';
+    renameBtn.title = 'Renomear';
+    renameBtn.onclick = (e) => {
+      e.stopPropagation();
+      renamePreset(preset.name);
+    };
+    actionsDiv.appendChild(renameBtn);
+    
+    // Botão excluir
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'preset-btn';
+    deleteBtn.textContent = '🗑️';
+    deleteBtn.title = 'Excluir';
+    deleteBtn.onclick = (e) => {
+      e.stopPropagation();
+      deletePreset(preset.name);
+    };
+    actionsDiv.appendChild(deleteBtn);
+    
+    presetItem.appendChild(actionsDiv);
+    presetsList.appendChild(presetItem);
+  });
+}
+
+// Exibe mensagem de feedback para ações de presets
+function showPresetFeedback(message, type = 'success') {
+  // Verifica se já existe um elemento de feedback
+  let feedback = document.getElementById('preset-feedback');
+  
+  if (!feedback) {
+    feedback = document.createElement('div');
+    feedback.id = 'preset-feedback';
+    feedback.style.position = 'fixed';
+    feedback.style.bottom = '20px';
+    feedback.style.right = '20px';
+    feedback.style.padding = '10px 20px';
+    feedback.style.borderRadius = '4px';
+    feedback.style.zIndex = '9999';
+    feedback.style.fontWeight = 'bold';
+    feedback.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+    document.body.appendChild(feedback);
+  }
+  
+  // Define a cor com base no tipo de mensagem
+  if (type === 'error') {
+    feedback.style.backgroundColor = '#f44336';
+    feedback.style.color = '#ffffff';
+  } else {
+    feedback.style.backgroundColor = '#4CAF50';
+    feedback.style.color = '#ffffff';
+  }
+  
+  feedback.textContent = message;
+  feedback.style.display = 'block';
+  
+  // Esconde a mensagem após 3 segundos
+  setTimeout(() => {
+    feedback.style.display = 'none';
+  }, 3000);
+}

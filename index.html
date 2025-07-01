@@ -45,6 +45,97 @@
     pointer-events: auto;
     cursor: text;
     }
+    
+    /* Estilos para a biblioteca de presets */
+    #presets-panel {
+      margin-top: 10px;
+    }
+    
+    #preset-actions {
+      display: flex;
+      margin-bottom: 10px;
+    }
+    
+    #preset-name {
+      flex: 1;
+      margin-right: 10px;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    
+    #presets-list {
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: #fff;
+    }
+    
+    .preset-item {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .preset-item:last-child {
+      border-bottom: none;
+    }
+    
+    .preset-item:hover {
+      background-color: #f5f5f5;
+    }
+    
+    .preset-info {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      cursor: pointer;
+    }
+    
+    .preset-thumbnail {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 4px;
+      border: 1px solid #ddd;
+      margin-right: 10px;
+    }
+    
+    .preset-thumbnail-placeholder {
+      width: 50px;
+      height: 50px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: #f0f0f0;
+      margin-right: 10px;
+      border-radius: 4px;
+      font-size: 24px;
+    }
+    
+    .preset-name {
+      flex: 1;
+      cursor: pointer;
+    }
+    
+    .preset-actions {
+      display: flex;
+    }
+    
+    .preset-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      margin-left: 5px;
+      color: #666;
+    }
+    
+    .preset-btn:hover {
+      color: #000;
+    }
 
   </style>
 </head>
@@ -79,6 +170,17 @@
       <input type="file" id="textureUpload" accept=".jpg,image/jpeg"/>
     </label>
     <div id="textureFeedback"></div>
+    
+    <!-- Biblioteca de Presets -->
+    <h2>Biblioteca</h2>
+    <div id="presets-panel">
+      <div id="preset-actions">
+        <input type="text" id="preset-name" placeholder="Nome do preset" />
+        <button id="btnSavePreset">Salvar preset atual</button>
+      </div>
+      <div id="presets-list"></div>
+    </div>
+    
     <br/><br/>
     <button id="btnUpdate">Atualizar</button>
     <button id="btnExport">Exportar GLTF</button>
