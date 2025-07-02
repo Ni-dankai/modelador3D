@@ -71,6 +71,7 @@ function init() {
   labelRenderer.setSize(window.innerWidth - UI_WIDTH - LIBRARY_WIDTH, window.innerHeight);
   labelRenderer.domElement.style.position = 'absolute';
   labelRenderer.domElement.style.top      = '0';
+  labelRenderer.domElement.style.pointerEvents = 'none'; // Garante que os labels não interfiram com cliques
   document.getElementById('canvas-container').appendChild(labelRenderer.domElement);
 
   // OrbitControls
@@ -290,12 +291,33 @@ function tweenUpdate(from,to){
     .to(tgt,600)
     .easing(TWEEN.Easing.Quadratic.InOut)
     .onUpdate(rebuildShelf)
-    .onComplete(rebuildShelf)
+    .onComplete(() => {
+      rebuildShelf();
+      
+      // Também atualizamos os parâmetros na instância do móvel principal, se existir
+      const mainFurnitureIndex = furnitureInstances.findIndex(inst => inst.id === "main-furniture");
+      if (mainFurnitureIndex >= 0) {
+        furnitureInstances[mainFurnitureIndex].params = { ...current };
+      }
+      
+      // Se o móvel principal está selecionado, atualizamos o painel de transformação
+      if (selectedInstance && selectedInstance.id === "main-furniture") {
+        showTransformPanel();
+      }
+    })
     .start();
 }
 
 function rebuildShelf(){
+  // Salvar posição e rotação do móvel principal anterior, se existir
+  let prevPosition = null;
+  let prevRotation = null;
+  
   if(shelfGroup){
+    // Salva posição e rotação anteriores
+    prevPosition = shelfGroup.position.clone();
+    prevRotation = shelfGroup.rotation.clone();
+    
     scene.remove(shelfGroup);
     shelfGroup.traverse(o=>{
       if(o.isMesh){
@@ -319,7 +341,24 @@ function rebuildShelf(){
   if (showMainFurniture) {
     // Não remove a grade aqui, ela é gerenciada separadamente
     shelfGroup = createShelfGroup(current);
+    
+    // Restaura posição e rotação se existirem
+    if (prevPosition) {
+      shelfGroup.position.copy(prevPosition);
+    }
+    
+    if (prevRotation) {
+      shelfGroup.rotation.copy(prevRotation);
+    }
+    
     scene.add(shelfGroup);
+    
+    // Atualiza a referência da instância no array de instâncias
+    const mainFurnitureIndex = furnitureInstances.findIndex(inst => inst.id === "main-furniture");
+    if (mainFurnitureIndex >= 0) {
+      furnitureInstances[mainFurnitureIndex].group = shelfGroup;
+    }
+    
     if (showDimensions) addDimensions(current); // Só adiciona cotas se ativado
   }
   
@@ -690,11 +729,20 @@ function animate() {
   // Rotação automática
   if (current.autoRotate && shelfGroup) {
     shelfGroup.rotation.y += 0.005;
+    
+    // Se houver rotação automática e dimensões, garante que as cotas permaneçam atualizadas
+    if (showDimensions && dimGroup === null) {
+      addDimensions(current);
+    }
   }
   
   controls.update();
   renderer.render(scene, camera);
+  
+  // Configura o labelRenderer para renderizar também elementos na camada 1 (cotas)
+  camera.layers.enable(1);
   labelRenderer.render(scene, camera);
+  camera.layers.enable(0);
 }
 
 function exportGLTF() {
@@ -792,6 +840,62 @@ function saveCurrentPreset() {
     return;
   }
   
+  const saveBtn = document.getElementById('btnSavePreset');
+  const isEditMode = saveBtn && saveBtn.dataset.editMode === "true";
+  
+  // Se estamos em modo de edição, atualizamos o preset existente
+  if (isEditMode && window.currentlyEditingPresetId) {
+    const presetToUpdate = presetsData.find(p => p.id === window.currentlyEditingPresetId);
+    if (presetToUpdate) {
+      // Confirma a atualização
+      const confirm = window.confirm(`Deseja atualizar o preset "${presetToUpdate.name}" com as novas dimensões?`);
+      if (!confirm) return;
+      
+      // Captura thumbnail do móvel atual
+      const thumbnail = captureShelfThumbnail();
+      
+      // Atualiza o preset
+      const updatedPreset = {
+        id: presetToUpdate.id,
+        name: presetToUpdate.name,
+        params: { ...current },
+        timestamp: new Date().toISOString(),
+        thumbnail: thumbnail
+      };
+      
+      // Remove o preset existente e adiciona o atualizado
+      presetsData = presetsData.filter(p => p.id !== presetToUpdate.id);
+      presetsData.push(updatedPreset);
+      
+      savePresetsToStorage();
+      updatePresetsUI();
+      
+      // Resetamos o modo de edição
+      resetPresetEditMode();
+      
+      // Removemos os botões adicionais
+      const saveAsNewBtn = document.getElementById('btnSaveAsNewPreset');
+      if (saveAsNewBtn && saveAsNewBtn.parentNode) {
+        saveAsNewBtn.parentNode.removeChild(saveAsNewBtn);
+      }
+      
+      const cancelEditBtn = document.getElementById('btnCancelEdit');
+      if (cancelEditBtn && cancelEditBtn.parentNode) {
+        cancelEditBtn.parentNode.removeChild(cancelEditBtn);
+      }
+      
+      // Limpa o campo de nome
+      const nameInput = document.getElementById('preset-name');
+      if (nameInput) {
+        nameInput.value = '';
+      }
+      
+      showPresetFeedback(`Preset "${presetToUpdate.name}" atualizado!`);
+      return;
+    }
+  }
+  
+  // Caso normal - salvar como novo preset
   const nameInput = document.getElementById('preset-name');
   let presetName = nameInput.value.trim();
   
@@ -828,6 +932,22 @@ function saveCurrentPreset() {
   
   savePresetsToStorage();
   updatePresetsUI();
+  
+  // Se estávamos em modo de edição, resetamos
+  if (isEditMode) {
+    resetPresetEditMode();
+    
+    // Removemos os botões adicionais
+    const saveAsNewBtn = document.getElementById('btnSaveAsNewPreset');
+    if (saveAsNewBtn && saveAsNewBtn.parentNode) {
+      saveAsNewBtn.parentNode.removeChild(saveAsNewBtn);
+    }
+    
+    const cancelEditBtn = document.getElementById('btnCancelEdit');
+    if (cancelEditBtn && cancelEditBtn.parentNode) {
+      cancelEditBtn.parentNode.removeChild(cancelEditBtn);
+    }
+  }
   
   // Limpa o campo de nome
   nameInput.value = '';
@@ -871,10 +991,168 @@ function renamePreset(id) {
   showPresetFeedback('Preset renomeado!');
 }
 
+// Edita preset - permite editar dimensões sem sobrescrever o preset original
+function editPreset(id) {
+  const preset = presetsData.find(p => p.id === id);
+  if (!preset) return;
+  
+  // Armazena o ID do preset sendo editado em uma variável global para referência posterior
+  window.currentlyEditingPresetId = id;
+  
+  // Ativa o móvel principal se não estiver ativado
+  if (!showMainFurniture) {
+    toggleMainFurniture();
+  }
+  
+  // Aplica os parâmetros do preset aos controles da UI (igual ao importPreset)
+  Object.entries(preset.params).forEach(([key, value]) => {
+    const element = document.getElementById(key === 'W' ? 'width' :
+                                           key === 'H' ? 'height' :
+                                           key === 'D' ? 'depth' :
+                                           key === 'boxTh' ? 'boxThickness' :
+                                           key === 'doorTh' ? 'doorThickness' :
+                                           key === 'legH' ? 'legHeight' :
+                                           key === 'legD' ? 'legDiameter' :
+                                           key === 'doorMargin' ? 'doorMargin' :
+                                           key === 'footOffset' ? 'footOffset' :
+                                           key);
+    
+    if (element) {
+      if (element.type === 'checkbox') {
+        element.checked = value;
+      } else {
+        element.value = value;
+      }
+    }
+  });
+  
+  // Atualiza o móvel
+  tweenUpdate(current, readUI());
+  
+  // Muda o texto do botão "Salvar Preset" para indicar que estamos em modo de edição
+  const saveBtn = document.getElementById('btnSavePreset');
+  if (saveBtn) {
+    saveBtn.textContent = `Atualizar "${preset.name}"`;
+    saveBtn.dataset.editMode = "true";
+  }
+  
+  // Adiciona um botão para salvar como novo (se não existir)
+  let saveAsNewBtn = document.getElementById('btnSaveAsNewPreset');
+  if (!saveAsNewBtn) {
+    const saveBtn = document.getElementById('btnSavePreset');
+    if (saveBtn && saveBtn.parentNode) {
+      saveAsNewBtn = document.createElement('button');
+      saveAsNewBtn.id = 'btnSaveAsNewPreset';
+      saveAsNewBtn.className = 'button';
+      saveAsNewBtn.textContent = 'Salvar Como Novo';
+      saveAsNewBtn.style.marginLeft = '5px';
+      saveAsNewBtn.addEventListener('click', saveAsNewPreset);
+      saveBtn.parentNode.insertBefore(saveAsNewBtn, saveBtn.nextSibling);
+    }
+  }
+  
+  // Adiciona um botão para cancelar a edição (se não existir)
+  let cancelEditBtn = document.getElementById('btnCancelEdit');
+  if (!cancelEditBtn) {
+    const presetControls = document.querySelector('.preset-controls') || saveBtn.parentNode;
+    if (presetControls) {
+      cancelEditBtn = document.createElement('button');
+      cancelEditBtn.id = 'btnCancelEdit';
+      cancelEditBtn.className = 'button';
+      cancelEditBtn.textContent = 'Cancelar Edição';
+      cancelEditBtn.style.marginTop = '5px';
+      cancelEditBtn.style.backgroundColor = '#f44336';
+      cancelEditBtn.style.color = 'white';
+      cancelEditBtn.style.border = 'none';
+      cancelEditBtn.style.padding = '5px 10px';
+      cancelEditBtn.style.borderRadius = '4px';
+      cancelEditBtn.style.width = '100%';
+      cancelEditBtn.addEventListener('click', cancelEditPreset);
+      presetControls.appendChild(cancelEditBtn);
+    }
+  }
+  
+  // Preenche o campo de nome com o nome do preset
+  const nameInput = document.getElementById('preset-name');
+  if (nameInput) {
+    nameInput.value = preset.name + ' (Editado)';
+    nameInput.focus();
+    nameInput.select();
+  }
+  
+  showPresetFeedback(`Editando "${preset.name}" - altere as dimensões e salve para atualizar ou salve como novo`);
+}
+
+// Salvar como novo preset durante a edição
+function saveAsNewPreset() {
+  // Limpa o campo de nome para forçar o usuário a dar um novo nome
+  const nameInput = document.getElementById('preset-name');
+  if (nameInput) {
+    nameInput.value = '';
+    nameInput.focus();
+    nameInput.placeholder = 'Digite um novo nome';
+  }
+  
+  // Altera os botões de volta ao normal
+  resetPresetEditMode();
+  
+  showPresetFeedback('Digite um novo nome para salvar');
+}
+
+// Cancelar a edição de um preset
+function cancelEditPreset() {
+  // Verifica se há um preset sendo editado
+  if (window.currentlyEditingPresetId) {
+    const preset = presetsData.find(p => p.id === window.currentlyEditingPresetId);
+    if (preset) {
+      // Pergunta se o usuário realmente deseja cancelar
+      if (!confirm(`Cancelar a edição de "${preset.name}"? As alterações não salvas serão perdidas.`)) {
+        return;
+      }
+    }
+  }
+  
+  // Restaura os botões ao estado normal
+  resetPresetEditMode();
+  
+  // Limpa o campo de nome
+  const nameInput = document.getElementById('preset-name');
+  if (nameInput) {
+    nameInput.value = '';
+  }
+  
+  // Remove os botões adicionais
+  const saveAsNewBtn = document.getElementById('btnSaveAsNewPreset');
+  if (saveAsNewBtn && saveAsNewBtn.parentNode) {
+    saveAsNewBtn.parentNode.removeChild(saveAsNewBtn);
+  }
+  
+  const cancelEditBtn = document.getElementById('btnCancelEdit');
+  if (cancelEditBtn && cancelEditBtn.parentNode) {
+    cancelEditBtn.parentNode.removeChild(cancelEditBtn);
+  }
+  
+  showPresetFeedback('Edição cancelada');
+}
+
+// Reseta o modo de edição de presets
+function resetPresetEditMode() {
+  window.currentlyEditingPresetId = null;
+  
+  const saveBtn = document.getElementById('btnSavePreset');
+  if (saveBtn) {
+    saveBtn.textContent = 'Salvar Preset';
+    delete saveBtn.dataset.editMode;
+  }
+}
+
 // Importa preset (carrega no móvel principal)
 function importPreset(id) {
   const preset = presetsData.find(p => p.id === id);
   if (!preset) return;
+  
+  // Reseta qualquer modo de edição anterior
+  resetPresetEditMode();
   
   // Aplica os parâmetros do preset aos controles da UI
   Object.entries(preset.params).forEach(([key, value]) => {
@@ -903,10 +1181,13 @@ function importPreset(id) {
   showPresetFeedback(`Preset "${preset.name}" carregado!`);
 }
 
-// Importa como nova instância na cena
+// Importa como nova instância do móvel
 function importAsInstance(id) {
   const preset = presetsData.find(p => p.id === id);
   if (!preset) return;
+  
+  // Nota: não resetamos o modo de edição aqui porque podemos estar
+  // editando um móvel e querer adicionar outras instâncias à cena
   
   // Cria uma nova instância do móvel com os parâmetros do preset
   const furnitureGroup = createShelfGroup(preset.params);
@@ -1016,6 +1297,7 @@ function updatePresetsUI() {
       </div>
       <div class="preset-actions">
         <button class="preset-btn" onclick="importAsInstance('${preset.id}')" title="Adicionar à cena">➕</button>
+        <button class="preset-btn" onclick="editPreset('${preset.id}')" title="Editar dimensões">🔄</button>
         <button class="preset-btn" onclick="renamePreset('${preset.id}')" title="Renomear">✏️</button>
         <button class="preset-btn" onclick="deletePreset('${preset.id}')" title="Excluir">🗑️</button>
       </div>
@@ -1140,6 +1422,12 @@ function removeInstanceById(id) {
   const instance = furnitureInstances.find(inst => inst.id === id);
   if (!instance) return;
   
+  // Tratamento especial para o móvel principal
+  if (instance.isMain && instance.id === "main-furniture") {
+    showPresetFeedback('Para remover o móvel principal, use o botão "Remover Móvel Principal"', 'error');
+    return;
+  }
+  
   if (confirm(`Remover "${instance.name}" da cena?`)) {
     scene.remove(instance.group);
     // Dispose resources
@@ -1216,6 +1504,15 @@ function applyInstanceTransform() {
     rotY * Math.PI / 180,
     rotZ * Math.PI / 180
   );
+  
+  // Se for o móvel principal, atualiza também a referência em shelfGroup
+  if (selectedInstance.isMain && selectedInstance.id === "main-furniture") {
+    // O shelfGroup já deve estar referenciando o mesmo objeto
+    // Se as dimensões estiverem ativadas mas não existirem, recriamos
+    if (showDimensions && (!dimGroup || !dimGroup.parent)) {
+      addDimensions(current);
+    }
+  }
   
   showPresetFeedback('Transformação aplicada!');
 }
@@ -1365,6 +1662,15 @@ function onMouseMove(event) {
         obj.position.copy(localCenter);
       }
     });
+    
+    // Se for o móvel principal e as dimensões estiverem ativas, verifica se precisa recriar
+    if (selectedInstance.isMain && selectedInstance.id === "main-furniture" && showDimensions) {
+      // As cotas já devem mover automaticamente com o móvel, pois foram adicionadas como filhas
+      // Apenas garantimos que as cotas existem
+      if (!dimGroup || !dimGroup.parent) {
+        addDimensions(current);
+      }
+    }
     
     // Atualiza os campos de posição em tempo real
     showTransformPanel();
@@ -1557,11 +1863,19 @@ function addDimensions(p) {
     );
   }
   
-  scene.add(dimGroup);
+  // Anexamos o grupo de dimensões ao shelfGroup para que se movam juntos
+  scene.remove(dimGroup); // Removemos do scene primeiro
+  shelfGroup.add(dimGroup); // Adicionamos ao shelfGroup para que se movam juntos
 }
 
 function drawDim(p1, p2, off, text) {
-  const mat = new THREE.LineBasicMaterial({ color: 0x000 });
+  const mat = new THREE.LineBasicMaterial({ 
+    color: 0x000,
+    depthTest: false, // Garante que as linhas sejam sempre visíveis
+    transparent: true,
+    opacity: 0.8
+  });
+  
   const a = p1.clone().add(off), b = p2.clone().add(off);
   dimGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), mat));
   
@@ -1573,8 +1887,11 @@ function drawDim(p1, p2, off, text) {
   const div = document.createElement('div');
   div.className = 'label';
   div.textContent = text;
+  div.style.pointerEvents = 'none'; // Evita que labels interfiram com clicks
   const lbl = new CSS2DObject(div);
   lbl.position.copy(mid);
+  // Permitimos que os rótulos se posicionem corretamente independente da rotação do móvel
+  lbl.layers.set(1); // Usa uma layer específica para as labels
   dimGroup.add(lbl);
 }
 
@@ -1589,13 +1906,19 @@ function toggleDimensions(force) {
     if (showDimensions) {
       addDimensions(current);
     } else if (dimGroup) {
-      scene.remove(dimGroup);
+      // Remove o grupo de dimensões, independentemente de onde esteja
+      if (dimGroup.parent) {
+        dimGroup.parent.remove(dimGroup);
+      }
       dimGroup.traverse(obj => {
         if (obj.element) obj.element.remove();
       });
       labelRenderer.domElement.innerHTML = '';
+      dimGroup = null;
     }
   }
+  
+  showPresetFeedback(showDimensions ? 'Dimensões exibidas' : 'Dimensões ocultadas');
 }
 
 function generatePartsList() {
@@ -1716,6 +2039,10 @@ window.importAsInstance = importAsInstance;
 window.importModuleInstance = importModuleInstance;
 window.deletePreset = deletePreset;
 window.renamePreset = renamePreset;
+window.editPreset = editPreset;
+window.saveAsNewPreset = saveAsNewPreset;
+window.cancelEditPreset = cancelEditPreset;
+window.resetPresetEditMode = resetPresetEditMode;
 window.selectInstance = selectInstance;
 window.removeInstanceById = removeInstanceById;
 window.applyInstanceTransform = applyInstanceTransform;
@@ -1773,12 +2100,42 @@ function toggleMainFurniture() {
   // Reconstrói o móvel com o novo estado
   rebuildShelf();
   
-  // Mensagem de feedback
-  if (showMainFurniture) {
-    showPresetFeedback('Móvel principal criado!');
+  // Se o móvel foi criado, registra-o como instância manipulável
+  if (showMainFurniture && shelfGroup) {
+    // Registra o móvel principal como uma instância especial
+    const mainInstance = {
+      id: "main-furniture",
+      name: "Móvel Principal",
+      group: shelfGroup,
+      params: { ...current },
+      isMain: true // Flag para identificar que é o móvel principal
+    };
+    
+    // Remove instância anterior do móvel principal, se existir
+    furnitureInstances = furnitureInstances.filter(inst => inst.id !== "main-furniture");
+    
+    // Adiciona à lista de instâncias
+    furnitureInstances.push(mainInstance);
+    
+    // Seleciona automaticamente o móvel principal
+    selectInstance("main-furniture");
+    
+    showPresetFeedback('Móvel principal criado e selecionado!');
   } else {
+    // Remove a instância do móvel principal
+    furnitureInstances = furnitureInstances.filter(inst => inst.id !== "main-furniture");
+    
+    // Se o móvel principal estava selecionado, limpa a seleção
+    if (selectedInstance && selectedInstance.id === "main-furniture") {
+      selectedInstance = null;
+      hideTransformPanel();
+    }
+    
     showPresetFeedback('Móvel principal removido.');
   }
+  
+  // Atualiza a lista de instâncias na interface
+  updateInstancesList();
 }
 
 // Expor função globalmente para ser acessível pelo HTML
