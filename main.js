@@ -1985,7 +1985,7 @@ function onKeyUp(event) {
 }
 
 function onDocumentClick(evt) {
-  if (!ctrlPressed || !shelfGroup) return;
+  if (!ctrlPressed) return;
   
   // Ajuste para levar em conta o offset do container do canvas
   const canvas = renderer.domElement;
@@ -1997,7 +1997,26 @@ function onDocumentClick(evt) {
   mouse.y = -(offsetY / canvas.clientHeight) * 2 + 1;
   
   raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObjects(shelfGroup.children, true);
+  
+  // Verifica cliques em todas as instâncias de móveis (incluindo o principal)
+  const allFurnitureGroups = [];
+  
+  // Adiciona o móvel principal se existir
+  if (shelfGroup) {
+    allFurnitureGroups.push(shelfGroup);
+  }
+  
+  // Adiciona todas as instâncias
+  furnitureInstances.forEach(instance => {
+    if (instance.group && instance.group !== shelfGroup) {
+      allFurnitureGroups.push(instance.group);
+    }
+  });
+  
+  if (allFurnitureGroups.length === 0) return;
+  
+  // Verifica intersecções com todos os móveis
+  const intersects = raycaster.intersectObjects(allFurnitureGroups, true);
   
   console.log('Clique com Ctrl detectado, intersects:', intersects.length);
   
