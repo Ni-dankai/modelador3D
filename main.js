@@ -761,49 +761,124 @@ function animate() {
 }
 
 function exportGLTF() {
+  // Verifica se há um móvel para exportar
   if (!showMainFurniture || !shelfGroup) {
-    showPresetFeedback('Nenhum móvel para exportar! Clique em "Criar Móvel" primeiro.', 'error');
+    showExportStatus('Nenhum móvel para exportar! Clique em "Criar Móvel" primeiro.', 'error');
     return;
   }
 
-  const exporter = new GLTFExporter();
-  const options = {
-    binary: true,
-    includeCustomExtensions: false,
-    forceIndices: false,
-    forcePowerOfTwoTextures: false,
-    maxTextureSize: 4096,
-    animations: [],
-    onlyVisible: true
-  };
+  showExportStatus('Preparando exportação...', 'info');
+  console.log('Iniciando exportação GLTF...');
 
-  // Clona o grupo para evitar modificar o original
-  const clonedGroup = shelfGroup.clone();
+  try {
+    const exporter = new GLTFExporter();
+    const options = {
+      binary: true,
+      includeCustomExtensions: false,
+      forceIndices: false,
+      forcePowerOfTwoTextures: false,
+      maxTextureSize: 4096,
+      animations: [],
+      onlyVisible: true
+    };
+
+    // Clona o grupo para evitar modificar o original
+    const clonedGroup = shelfGroup.clone();
+    
+    // Remove linhas de contorno da exportação
+    const toRemove = [];
+    clonedGroup.traverse(obj => {
+      if (obj.isLineSegments || obj.isLine) {
+        toRemove.push(obj);
+      }
+    });
+    
+    // Remove os objetos identificados
+    toRemove.forEach(obj => {
+      if (obj.parent) {
+        obj.parent.remove(obj);
+      }
+    });
+
+    showExportStatus('Convertendo modelo...', 'info');
+    console.log('Grupo clonado e limpo, iniciando parse...');
+
+    exporter.parse(
+      clonedGroup,
+      result => {
+        console.log('Parse concluído, criando download...');
+        try {
+          const blob = new Blob([result], { type: 'application/octet-stream' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'movel_3d.glb';
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          console.log('Exportação concluída com sucesso!');
+          showExportStatus('Modelo exportado com sucesso!', 'success');
+        } catch (downloadError) {
+          console.error('Erro ao fazer download:', downloadError);
+          showExportStatus('Erro ao fazer download do arquivo!', 'error');
+        }
+      },
+      error => {
+        console.error('Erro na exportação GLTF:', error);
+        showExportStatus('Erro ao exportar o modelo: ' + error.message, 'error');
+      },
+      options
+    );
+  } catch (initError) {
+    console.error('Erro ao inicializar exportação:', initError);
+    showExportStatus('Erro ao inicializar a exportação: ' + initError.message, 'error');
+  }
+}
+
+// Função auxiliar para mostrar status da exportação
+function showExportStatus(message, type = 'info') {
+  const statusDiv = document.getElementById('exportStatus');
+  const messageSpan = document.getElementById('exportMessage');
   
-  // Remove linhas de contorno da exportação
-  clonedGroup.traverse(obj => {
-    if (obj.isLineSegments || obj.isLine) {
-      obj.parent.remove(obj);
+  if (statusDiv && messageSpan) {
+    messageSpan.textContent = message;
+    statusDiv.style.display = 'block';
+    
+    // Define cor baseado no tipo
+    switch (type) {
+      case 'success':
+        statusDiv.style.backgroundColor = '#d4edda';
+        statusDiv.style.color = '#155724';
+        statusDiv.style.border = '1px solid #c3e6cb';
+        break;
+      case 'error':
+        statusDiv.style.backgroundColor = '#f8d7da';
+        statusDiv.style.color = '#721c24';
+        statusDiv.style.border = '1px solid #f5c6cb';
+        break;
+      case 'info':
+      default:
+        statusDiv.style.backgroundColor = '#d1ecf1';
+        statusDiv.style.color = '#0c5460';
+        statusDiv.style.border = '1px solid #bee5eb';
+        break;
     }
-  });
-
-  exporter.parse(
-    clonedGroup,
-    result => {
-      const blob = new Blob([result], { type: 'application/octet-stream' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'movel_3d.glb';
-      a.click();
-      URL.revokeObjectURL(url);
-    },
-    error => {
-      console.error('Erro na exportação GLTF:', error);
-      alert('Erro ao exportar o modelo!');
-    },
-    options
-  );
+    
+    // Auto-esconde mensagens de sucesso e info após 3 segundos
+    if (type === 'success' || type === 'info') {
+      setTimeout(() => {
+        if (statusDiv) {
+          statusDiv.style.display = 'none';
+        }
+      }, 3000);
+    }
+  } else {
+    // Fallback para alert se os elementos não existirem
+    alert(message);
+  }
 }
 
 // ===== BIBLIOTECA DE PRESETS =====

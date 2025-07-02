@@ -293,6 +293,27 @@
     <label>Balanço Pés (mm): <input id="footOffset" type="number" value="50"/></label><br/>
     <h2>Opções</h2>
     <label><input id="handles" type="checkbox" unchecked/> Puxadores</label><br/>
+    
+    <!-- Interface de configuração do puxador -->
+    <div id="handleConfig" style="display:none; margin-left:20px; background:#e8e8e8; padding:10px; border-radius:5px; margin-top:5px;">
+      <h4 style="margin:0 0 10px 0;">Configuração do Puxador</h4>
+      <label>Comprimento (mm): <input id="handleLength" type="number" value="300" min="50" max="800" step="10"/></label><br/>
+      <label>Orientação:
+        <select id="handleOrientation">
+          <option value="vertical">Vertical</option>
+          <option value="horizontal">Horizontal</option>
+        </select>
+      </label><br/>
+      <label>Posição Horizontal (%): <input id="handlePosX" type="number" value="15" min="5" max="85" step="5"/></label><br/>
+      <label>Posição Vertical (%): <input id="handlePosY" type="number" value="75" min="15" max="85" step="5"/></label><br/>
+      <small style="color:#666;">
+        <b>Puxador Vertical:</b> Posição horizontal define distância da dobradiça (respeitando limites da porta)<br>
+        <b>Puxador Horizontal:</b> Centralizado automaticamente na largura da porta<br>
+        <b>Posição vertical:</b> 15% = parte inferior, 85% = parte superior (com margens de segurança)<br>
+        <em>Os puxadores são automaticamente limitados para não atravessar divisórias ou sair da porta</em>
+      </small>
+    </div>
+    
     <label><input id="backPanel" type="checkbox" checked/> Painel Traseiro</label><br/>
     <label><input id="grid" type="checkbox" checked/> Grade</label><br/>
     <label><input id="autoRotate" type="checkbox"/> Rotação Automática</label><br/>
@@ -313,6 +334,11 @@
     <button id="btnUpdate">Atualizar</button>
     <button id="btnExport">Exportar GLTF</button>
     <button id="btnToggleDims">Mostrar/ocultar cotas</button>
+    
+    <div id="exportStatus" style="margin-top: 10px; padding: 8px; border-radius: 4px; display: none;">
+      <span id="exportMessage"></span>
+    </div>
+    
     <h4>Segure Ctrl + Mouse 1 para abrir portas</h4>
     <div id="partsList" style="margin-top: 15px; border-top: 1px solid #ccc; padding-top: 10px;"></div>
   </div>
