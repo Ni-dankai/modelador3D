@@ -33,6 +33,7 @@ let handleGLTF = null;
 let current     = {};
 let ctrlPressed = false; // Novo estado global para Ctrl
 let showDimensions = true; // Novo estado global para cotas
+let showMainFurniture = false; // Controla visibilidade do móvel principal
 
 // carrega modelo de puxador
 new GLTFLoader().load(
@@ -89,10 +90,11 @@ function init() {
   initMaterials();
   current = readUI();
   
-  // Garante que o móvel seja construído após um pequeno delay
+  // Inicializa componentes necessários sem criar o móvel principal
   setTimeout(() => {
-    rebuildShelf();
     addCustomTextureUI();
+    // Inicializa o painel da lista de peças, mas vazio
+    generatePartsList();
   }, 50);
   
   bindUI();
@@ -231,6 +233,42 @@ function bindUI(){
     clearBtn.addEventListener('click', clearScene);
   }
   
+  // Adiciona o botão "Criar Móvel" na interface
+  const toggleMainBtn = document.getElementById('btnToggleMainFurniture');
+  if (toggleMainBtn) {
+    toggleMainBtn.addEventListener('click', toggleMainFurniture);
+  } else {
+    // Se o botão não existe, vamos criá-lo
+    const ui = document.getElementById('ui');
+    if (ui) {
+      const btnContainer = document.createElement('div');
+      btnContainer.style.marginTop = '15px';
+      btnContainer.style.marginBottom = '15px';
+      btnContainer.style.textAlign = 'center';
+      
+      const btn = document.createElement('button');
+      btn.id = 'btnToggleMainFurniture';
+      btn.textContent = 'Criar Móvel';
+      btn.style.padding = '8px 15px';
+      btn.style.backgroundColor = '#4CAF50';
+      btn.style.color = 'white';
+      btn.style.border = 'none';
+      btn.style.borderRadius = '4px';
+      btn.style.fontWeight = 'bold';
+      btn.addEventListener('click', toggleMainFurniture);
+      
+      btnContainer.appendChild(btn);
+      
+      // Insere após os controles principais, antes da lista de peças
+      const partsList = document.getElementById('partsList');
+      if (partsList) {
+        ui.insertBefore(btnContainer, partsList);
+      } else {
+        ui.appendChild(btnContainer);
+      }
+    }
+  }
+  
   // Carrega os presets salvos
   loadPresets();
   
@@ -265,11 +303,27 @@ function rebuildShelf(){
         Array.isArray(o.material)?o.material.forEach(m=>m.dispose()):o.material.dispose();
       }
     });
+    shelfGroup = null;
   }
-  // Não remove a grade aqui, ela é gerenciada separadamente
-  shelfGroup = createShelfGroup(current);
-  scene.add(shelfGroup);
-  if (showDimensions) addDimensions(current); // Só adiciona cotas se ativado
+  
+  // Remove dimensões existentes
+  if (dimGroup) {
+    scene.remove(dimGroup);
+    dimGroup.traverse(obj => {
+      if (obj.element) obj.element.remove();
+    });
+    dimGroup = null;
+  }
+  
+  // Apenas cria o móvel principal se showMainFurniture for true
+  if (showMainFurniture) {
+    // Não remove a grade aqui, ela é gerenciada separadamente
+    shelfGroup = createShelfGroup(current);
+    scene.add(shelfGroup);
+    if (showDimensions) addDimensions(current); // Só adiciona cotas se ativado
+  }
+  
+  // Atualiza lista de peças (pode estar vazia se não houver móvel principal)
   generatePartsList();
 }
 
@@ -644,8 +698,8 @@ function animate() {
 }
 
 function exportGLTF() {
-  if (!shelfGroup) {
-    alert('Nenhum móvel para exportar!');
+  if (!showMainFurniture || !shelfGroup) {
+    showPresetFeedback('Nenhum móvel para exportar! Clique em "Criar Móvel" primeiro.', 'error');
     return;
   }
 
@@ -732,6 +786,12 @@ function savePresetsToStorage() {
 
 // Salva o preset atual
 function saveCurrentPreset() {
+  // Verifica se tem um móvel principal para salvar
+  if (!showMainFurniture || !shelfGroup) {
+    showPresetFeedback('Não há móvel para salvar! Clique em "Criar Móvel" primeiro.', 'error');
+    return;
+  }
+  
   const nameInput = document.getElementById('preset-name');
   let presetName = nameInput.value.trim();
   
@@ -1539,7 +1599,17 @@ function toggleDimensions(force) {
 }
 
 function generatePartsList() {
-  if (!shelfGroup) return;
+  const listElement = document.getElementById('partsList');
+  if (!listElement) return;
+  
+  // Limpa a lista de peças
+  listElement.innerHTML = '<h3>Lista de Peças</h3>';
+  
+  // Se não houver móvel principal, mostra mensagem informativa
+  if (!shelfGroup) {
+    listElement.innerHTML += '<div style="padding:10px; color:#666; text-align:center;">Nenhum móvel em edição.<br>Clique em "Criar Móvel" para começar.</div>';
+    return;
+  }
   
   const parts = {};
   const dimensions = {};
@@ -1563,23 +1633,18 @@ function generatePartsList() {
     }
   });
   
-  const listEl = document.getElementById('partsList');
-  if (listEl) {
-    listEl.innerHTML = '<h3>Lista de Peças</h3>';
-    
-    // Cria tabela para exibir de forma mais organizada
-    let html = '<table style="width:100%; margin-top:10px;">';
-    html += '<tr><th>Peça</th><th>Qtd</th><th>Dimensões (mm)</th></tr>';
-    
-    Object.entries(parts).forEach(([name, count]) => {
-      const dim = dimensions[name];
-      const dimText = dim ? `${dim.width} × ${dim.height} × ${dim.depth}` : '—';
-      html += `<tr><td>${name}</td><td>${count}</td><td>${dimText}</td></tr>`;
-    });
-    
-    html += '</table>';
-    listEl.innerHTML += html;
-  }
+  // Cria tabela para exibir de forma mais organizada
+  let html = '<table style="width:100%; margin-top:10px;">';
+  html += '<tr><th>Peça</th><th>Qtd</th><th>Dimensões (mm)</th></tr>';
+  
+  Object.entries(parts).forEach(([name, count]) => {
+    const dim = dimensions[name];
+    const dimText = dim ? `${dim.width} × ${dim.height} × ${dim.depth}` : '—';
+    html += `<tr><td>${name}</td><td>${count}</td><td>${dimText}</td></tr>`;
+  });
+  
+  html += '</table>';
+  listElement.innerHTML += html;
 }
 
 // ===== EVENTOS DE TECLADO E MOUSE =====
@@ -1687,3 +1752,34 @@ function convertLegacyPresets() {
 // Chama a conversão ao carregar os presets
 loadPresets();
 convertLegacyPresets();
+
+// Função para mostrar/esconder o móvel principal
+function toggleMainFurniture() {
+  // Inverte o estado atual
+  showMainFurniture = !showMainFurniture;
+  
+  // Atualiza o texto do botão com base no estado
+  const btn = document.getElementById('btnToggleMainFurniture');
+  if (btn) {
+    if (showMainFurniture) {
+      btn.textContent = 'Remover Móvel Principal';
+      btn.style.backgroundColor = '#f44336'; // Vermelho
+    } else {
+      btn.textContent = 'Criar Móvel';
+      btn.style.backgroundColor = '#4CAF50'; // Verde
+    }
+  }
+  
+  // Reconstrói o móvel com o novo estado
+  rebuildShelf();
+  
+  // Mensagem de feedback
+  if (showMainFurniture) {
+    showPresetFeedback('Móvel principal criado!');
+  } else {
+    showPresetFeedback('Móvel principal removido.');
+  }
+}
+
+// Expor função globalmente para ser acessível pelo HTML
+window.toggleMainFurniture = toggleMainFurniture;
