@@ -182,6 +182,8 @@ function initMaterials() {
 }
 
 function readUI(){
+  const materialValue = document.getElementById('material').value;
+  
   return {
     W: +get('width'),
     H: +get('height'),
@@ -198,7 +200,7 @@ function readUI(){
     backPanel: chk('backPanel'),
     grid:      chk('grid'),
     autoRotate:chk('autoRotate'),
-    material:  document.getElementById('material').value
+    material:  materialValue
   };
 }
 
@@ -213,7 +215,12 @@ function bindUI(){
   if (btnExport) btnExport.addEventListener('click', exportGLTF);
   
   document.querySelectorAll('input,select').forEach(el => {
-    el.addEventListener('change', upd);
+    el.addEventListener('change', (event) => {
+      if (event.target.id === 'material') {
+        console.log('Material alterado para:', event.target.value);
+      }
+      upd();
+    });
   });
   
   // Listener especial para o checkbox da grade
@@ -481,22 +488,13 @@ function createShelfGroup(p){
 }
 
 function addCustomTextureUI() {
-  // Cria input de upload se não existir
-  if (!document.getElementById('customTextureInput')) {
-    const panel = document.getElementById('control-panel') || document.body;
-    const label = document.createElement('label');
-    label.textContent = 'Importar textura (.jpg): ';
-    label.style.display = 'block';
-    label.style.margin = '8px 0 2px 0';
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.jpg,image/jpeg';
-    input.id = 'customTextureInput';
-    input.style.marginRight = '8px';
-    label.appendChild(input);
-    panel.insertBefore(label, panel.firstChild);
+  // Usa o input de upload que já existe no HTML
+  const input = document.getElementById('textureUpload');
+  if (input && !input.hasEventListener) {
     input.addEventListener('change', handleCustomTextureUpload);
+    input.hasEventListener = true; // Marca para evitar múltiplos listeners
   }
+  
   // Carrega texturas customizadas da sessão
   const saved = sessionStorage.getItem('customTextureList');
   if (saved) {
@@ -513,10 +511,12 @@ function handleCustomTextureUpload(e) {
     alert('Apenas arquivos .jpg são suportados.');
     return;
   }
+  
   const reader = new FileReader();
   reader.onload = function(ev) {
     const url = ev.target.result;
     const name = 'custom_' + Date.now();
+    
     customTextureList.push({ name, url });
     sessionStorage.setItem('customTextureList', JSON.stringify(customTextureList));
     loadCustomTexture({ name, url }, true);
@@ -542,16 +542,22 @@ function loadCustomTexture({ name, url }, selectAfter) {
       return new THREE.MeshStandardMaterial({ map: t });
     };
     updateMaterialSelect(selectAfter ? name : undefined);
+  }, undefined, err => {
+    console.error('Erro ao carregar textura:', name, err);
   });
 }
 
 function updateMaterialSelect(selectName) {
   const sel = document.getElementById('material');
   if (!sel) return;
+  
   // Remove opções customizadas antigas
   Array.from(sel.options).forEach(opt => {
-    if (opt.value.startsWith('custom_')) sel.removeChild(opt);
+    if (opt.value.startsWith('custom_')) {
+      sel.removeChild(opt);
+    }
   });
+  
   // Adiciona opções customizadas
   customTextureList.forEach(({ name }, i) => {
     if (!sel.querySelector(`option[value="${name}"]`)) {
@@ -561,7 +567,16 @@ function updateMaterialSelect(selectName) {
       sel.appendChild(opt);
     }
   });
-  if (selectName) sel.value = selectName;
+  
+  if (selectName) {
+    sel.value = selectName;
+    
+    // Força a atualização do móvel se ele existir
+    if (showMainFurniture) {
+      const newParams = readUI();
+      tweenUpdate(current, newParams);
+    }
+  }
 }
 
 function showTextureFeedback(msg) {
